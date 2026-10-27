@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.14" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.16" />
   </ItemGroup>
 
