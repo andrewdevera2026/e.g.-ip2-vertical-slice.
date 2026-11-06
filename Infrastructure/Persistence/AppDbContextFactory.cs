@@ -22,3 +22,4 @@ public sealed class AppDbContextFactory
         return new AppDbContext(options);
     }
 }
+
