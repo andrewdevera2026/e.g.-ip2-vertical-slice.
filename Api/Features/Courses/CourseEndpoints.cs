@@ -28,7 +28,8 @@ public static class CourseEndpoints
             .WithSummary("Get course by ID");
         group.MapDelete("/{id:guid}", Delete)
             .WithName("DeleteCourse")
-            .WithSummary("Delete a course");
+            .WithSummary("Delete a course")
+            .RequireAuthorization();
     }
 
 

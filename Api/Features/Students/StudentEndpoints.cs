@@ -12,7 +12,8 @@ public static class StudentEndpoints
     public static void MapStudentEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/students")
-            .WithTags("Students");
+     .WithTags("Students")
+     .RequireAuthorization();
 
         group.MapGet("/", GetAll)
             .WithName("GetAllStudents")
@@ -25,6 +26,9 @@ public static class StudentEndpoints
         group.MapGet("/{id:guid}", GetById)
             .WithName("GetStudentById")
             .WithSummary("Get student by ID");
+
+         
+
     }
 
     private static async Task<IResult> GetAll(
