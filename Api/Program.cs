@@ -1,3 +1,4 @@
+using Api.Common.Authorization;
 using Api.Features.Admissions;
 using Api.Features.Auth;
 using Api.Features.Courses;
@@ -21,6 +22,7 @@ using FluentValidation;
 using Infrastructure.Authentication;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -115,7 +117,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+// Policies + ownership handler (Steps 12 and 14)
+builder.Services.AddAppAuthorization();
+builder.Services.AddSingleton<IAuthorizationHandler, AdmissionOwnerHandler>();
 
 // Background cleanup (Step 10)
 builder.Services.AddHostedService<Infrastructure.BackgroundJobs.RevokedTokenCleanupService>();
@@ -151,6 +155,24 @@ builder.Services.AddOpenApi(options =>
 var app = builder.Build();
 
 await app.Services.MigrateAndSeedAsync();
+
+// JSON bodies for 401/403 (Step 12)
+app.UseStatusCodePages(async context =>
+{
+    var response = context.HttpContext.Response;
+    if (response.StatusCode is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden)
+    {
+        response.ContentType = "application/problem+json";
+        await response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Status = response.StatusCode,
+            Title = response.StatusCode == StatusCodes.Status401Unauthorized ? "Unauthorized" : "Forbidden",
+            Detail = response.StatusCode == StatusCodes.Status401Unauthorized
+                ? "Authentication is required to access this resource."
+                : "You do not have permission to perform this action."
+        });
+    }
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
