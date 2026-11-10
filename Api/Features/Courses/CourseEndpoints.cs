@@ -13,7 +13,8 @@ public static class CourseEndpoints
     public static void MapCourseEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/courses")
-            .WithTags("Courses");
+            .WithTags("Courses")
+             .RequireAuthorization();
 
         group.MapGet("/", GetAll)
             .WithName("GetAllCourses")
@@ -28,8 +29,8 @@ public static class CourseEndpoints
             .WithSummary("Get course by ID");
         group.MapDelete("/{id:guid}", Delete)
             .WithName("DeleteCourse")
-            .WithSummary("Delete a course")
-            .RequireAuthorization();
+            .WithSummary("Delete a course");
+           
     }
 
 

@@ -25,6 +25,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -63,7 +65,7 @@ builder.Services.AddOptions<JwtOptions>()
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 
-// JWT validation (Step 6)
+// JWT validation + revocation checks (Steps 6 and 9)
 var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -81,9 +83,42 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 Encoding.UTF8.GetBytes(jwtSection["SigningKey"]!)),
             ClockSkew = TimeSpan.FromSeconds(30)
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var dbContext = context.HttpContext.RequestServices.GetRequiredService<IAppDbContext>();
+
+                var jti = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Jti);
+                var sub = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub)
+                    ?? context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                var iatRaw = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Iat);
+
+                if (jti is not null && await dbContext.RevokedTokens.AnyAsync(r => r.Jti == jti))
+                {
+                    context.Fail("Token has been revoked.");
+                    return;
+                }
+
+                if (Guid.TryParse(sub, out var userId) && long.TryParse(iatRaw, out var iatUnix))
+                {
+                    var issuedAtUtc = DateTimeOffset.FromUnixTimeSeconds(iatUnix).UtcDateTime;
+                    var appUser = await dbContext.Users.FindAsync(userId);
+
+                    if (appUser?.TokensValidFromUtc is { } validFrom && issuedAtUtc < validFrom)
+                    {
+                        context.Fail("Token was issued before the user's last sign-out-everywhere.");
+                    }
+                }
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
+
+// Background cleanup (Step 10)
+builder.Services.AddHostedService<Infrastructure.BackgroundJobs.RevokedTokenCleanupService>();
 
 // API + Scalar Bearer scheme (Step 7)
 builder.Services.AddEndpointsApiExplorer();
